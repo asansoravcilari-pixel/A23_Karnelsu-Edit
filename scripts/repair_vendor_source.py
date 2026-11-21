@@ -37,6 +37,17 @@ replace_exact(
     "\n}",
 )
 
+# Qualcomm's genksyms parser fails on the __packed return type of
+# __gsi_update_mhi_channel_scratch(), the static helper immediately before
+# EXPORT_SYMBOL(gsi_write_channel_scratch). The unresolved CRC then makes
+# vmlinux fail with R_AARCH64_ABS32. The union itself stays __packed, so this
+# changes no type layout or calling convention.
+replace_exact(
+    "drivers/platform/msm/gsi/gsi.c",
+    "static union __packed gsi_channel_scratch __gsi_update_mhi_channel_scratch(",
+    "static union gsi_channel_scratch __gsi_update_mhi_channel_scratch(",
+)
+
 # The union TAG is already declared as packed in msm_gsi.h. Adding
 # a second __packed attribute on every by-value function parameter
 # is redundant and confuses older genksyms for this exported symbol.
