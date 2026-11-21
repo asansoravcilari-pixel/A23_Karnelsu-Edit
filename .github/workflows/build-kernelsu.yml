@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/build-kernelsu.yml'
       - 'scripts/build_kernelsu.sh'
+      - 'scripts/repair_vendor_source.py'
 
 permissions:
   contents: read
