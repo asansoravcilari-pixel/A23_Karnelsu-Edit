@@ -21,6 +21,41 @@ grep -qx 'kernel_src/Makefile' "$WORK_DIR/archive-files.txt"
 mkdir -p unpack
 tar -xzf source.tar.gz -C unpack --no-same-owner
 cd unpack/kernel_src
+# KernelSU uses dynamic kprobes when CONFIG_KPROBES=y. The supplied
+# vendor source also contains legacy direct-call hooks; leaving both
+# enabled creates unresolved ksu_*_hook symbols at vmlinux link time.
+# Gate only these legacy direct-call sites when kprobes are enabled.
+for source_file in fs/read_write.c fs/exec.c drivers/input/input.c; do
+    count="$(grep -c '^#ifdef CONFIG_KSU || { echo 'KernelSU integration missing'; exit 12; }
+grep -q '^CONFIG_KSU=y' arch/arm64/configs/vendor/a23_eur_open_defconfig || { echo 'KernelSU not enabled'; exit 13; }
+
+export PATH="/usr/lib/llvm-14/bin:$PATH"
+for cmd in clang-14 ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf aarch64-linux-gnu-gcc aarch64-linux-gnu-ld arm-linux-gnueabi-gcc bison flex bc make; do
+    command -v "$cmd" >/dev/null || { echo "Tool missing: $cmd"; exit 14; }
+done
+mkdir -p out
+args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 LD=aarch64-linux-gnu-ld HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y)
+make "${args[@]}" vendor/a23_eur_open_defconfig 2>&1 | tee "$WORK_DIR/config.log"
+grep -q '^CONFIG_KSU=y' out/.config || { echo 'KernelSU was lost in config'; exit 15; }
+# Clang 14 emits unused-but-set-variable as -Werror in legacy Qualcomm audio sources.
+# Demote ONLY this diagnostic; preserve all other compiler errors and driver behavior.
+make "${args[@]}" KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
+mkdir -p "$WORK_DIR/result"
+cp out/.config "$WORK_DIR/result/kernel.config"
+find out/arch/arm64/boot -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name '*-dtb' \) -exec cp -v {} "$WORK_DIR/result/" \;
+ls -lah "$WORK_DIR/result"
+test -s "$WORK_DIR/result/Image" || test -s "$WORK_DIR/result/Image.gz"
+sha256sum "$WORK_DIR"/result/* | tee "$WORK_DIR/result/SHA256SUMS"
+echo "Build outputs ready for validation; this is NOT a flashable boot.img."
+ "$source_file")"
+    if [[ "$count" != 2 ]]; then
+        echo "Unexpected KernelSU hook layout in $source_file (found $count expected 2)" >&2
+        exit 21
+    fi
+    sed -i 's/^#ifdef CONFIG_KSU$/#if defined(CONFIG_KSU) \&\& !defined(CONFIG_KPROBES)/' "$source_file"
+done
+# Preserve CONFIG_MODVERSIONS for vendor modules; use GNU BFD linker to
+# avoid LLD's R_AARCH64_ABS32 CRC table relocation error in legacy 4.19.
 [[ -L drivers/kernelsu && -f drivers/kernelsu/Makefile ]] || { echo 'KernelSU integration missing'; exit 12; }
 grep -q '^CONFIG_KSU=y' arch/arm64/configs/vendor/a23_eur_open_defconfig || { echo 'KernelSU not enabled'; exit 13; }
 
