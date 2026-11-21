@@ -1,0 +1,42 @@
+name: SM-A235F KernelSU kernel build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-kernelsu.yml'
+      - 'scripts/build_kernelsu.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-14 lld-14 llvm-14 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu bc bison flex build-essential libssl-dev libelf-dev libncurses-dev zstd python3-pip
+          python3 -m pip install --break-system-packages 'gdown>=5.2,<6'
+
+      - name: Build KernelSU-enabled kernel
+        env:
+          WORK_DIR: ${{ github.workspace }}/a23-build
+          JOBS: '4'
+        run: bash scripts/build_kernelsu.sh
+
+      - name: Upload kernel and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-KernelSU-build
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            a23-build/result/**
+            a23-build/config.log
+            a23-build/build.log
