@@ -5,6 +5,7 @@ Preserves SELinux, CONFIG_MODVERSIONS, CONFIG_RELOCATABLE and
 the packed GSI union definition. Aborts if upstream inputs change.
 """
 from pathlib import Path
+import stat
 
 root = Path.cwd()
 
@@ -14,6 +15,9 @@ def replace_exact(relative, old, new, expected=1):
     count = source.count(old)
     if count != expected:
         raise SystemExit(f"Unexpected source layout: {relative}: expected {expected}, found {count}")
+    # The original firmware archive records some source files as read-only.
+    # The extracted copy belongs to this job; make just this target user-writable.
+    path.chmod(path.stat().st_mode | stat.S_IWUSR)
     path.write_text(source.replace(old, new))
     print(f"Patched {relative}: {count} change(s)")
 
