@@ -32,7 +32,9 @@ mkdir -p out
 args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y)
 make "${args[@]}" vendor/a23_eur_open_defconfig 2>&1 | tee "$WORK_DIR/config.log"
 grep -q '^CONFIG_KSU=y' out/.config || { echo 'KernelSU was lost in config'; exit 15; }
-make "${args[@]}" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
+# Clang 14 emits unused-but-set-variable as -Werror in legacy Qualcomm audio sources.
+# Demote ONLY this diagnostic; preserve all other compiler errors and driver behavior.
+make "${args[@]}" KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
 mkdir -p "$WORK_DIR/result"
 cp out/.config "$WORK_DIR/result/kernel.config"
 find out/arch/arm64/boot -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name '*-dtb' \) -exec cp -v {} "$WORK_DIR/result/" \;
