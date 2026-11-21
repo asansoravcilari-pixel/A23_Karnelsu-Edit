@@ -21,6 +21,7 @@ grep -qx 'kernel_src/Makefile' "$WORK_DIR/archive-files.txt"
 mkdir -p unpack
 tar -xzf source.tar.gz -C unpack --no-same-owner
 cd unpack/kernel_src
+python3 "$GITHUB_WORKSPACE/scripts/repair_vendor_source.py"
 # The source ships both dynamic kprobes and legacy direct hooks.
 # CONFIG_KPROBES=y means hook variables are not defined by KernelSU.
 # Disable only the duplicate direct-call sites; keep dynamic kprobe support.
