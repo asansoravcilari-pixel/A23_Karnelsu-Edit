@@ -54,7 +54,8 @@ esac
 echo "$PROFILE" > "$WORK_DIR/kernel_profile.txt"
 # scripts/config edits the generated config, NOT the source defconfig.
 # olddefconfig re-evaluates dependencies, particularly SELinux dependent flags.
-./scripts/config --file out/.config --set-val PANIC_TIMEOUT 0 --disable PANIC_ON_OOPS
+./scripts/config --file out/.config --set-val PANIC_TIMEOUT 0 --disable PANIC_ON_OOPS \
+    --set-str LOCALVERSION '-perf-28692735-abA235FXXSEEZB1' --disable LOCALVERSION_AUTO
 if [[ "$PROFILE" == "enforcing_panic0" ]]; then
     ./scripts/config --file out/.config --enable SECURITY_SELINUX --enable DEFAULT_SECURITY_SELINUX
 else
@@ -80,6 +81,12 @@ else
         echo 'Stale SELinux-dependent config option' >&2; exit 36
     fi
 fi
+# Keep uname -r identical to the stock firmware to avoid obvious
+# vermagic mismatch with vendor modules. Symbol CRC/ABI still need validation.
+EXPECTED_RELEASE='4.19.157-perf-28692735-abA235FXXSEEZB1'
+ACTUAL_RELEASE="$(make "${args[@]}" --no-print-directory -s kernelrelease | tail -n 1)"
+echo "Kernel release: $ACTUAL_RELEASE (expected: $EXPECTED_RELEASE)"
+[[ "$ACTUAL_RELEASE" == "$EXPECTED_RELEASE" ]] || { echo 'Kernel release mismatch' >&2; exit 37; }
 cp out/.config "$WORK_DIR/kernel-prebuild.config"
 echo "Profile verified: $PROFILE" | tee -a "$WORK_DIR/config.log"
 # Clang 14 emits unused-but-set-variable as -Werror in legacy Qualcomm audio sources.
