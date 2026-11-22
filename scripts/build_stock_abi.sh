@@ -36,7 +36,7 @@ import re, stat, sys
 from pathlib import Path
 path=Path(sys.argv[1])
 s=path.read_text()
-pattern=r'(?m)^[ \\t]*#[ \\t]*include[ \\t]*[<"]drivers/block/loop\\.h[>"]'
+pattern=r'(?m)^[ \t]*#[ \t]*include[ \t]*[<"]drivers/block/loop\.h[>"]'
 patched,count=re.subn(pattern, '#include "../../../drivers/block/loop.h"',s)
 if count != 1:
     print("Unexpected FIVE header include count:", count)
