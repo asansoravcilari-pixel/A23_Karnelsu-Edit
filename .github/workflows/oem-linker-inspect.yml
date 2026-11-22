@@ -1,0 +1,39 @@
+name: SM-A235F OEM Linker Source Diagnostic (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/oem-linker-inspect.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install downloader
+        run: |
+          python3 -m pip install --break-system-packages 'gdown>=5.2,<6'
+      - name: Verify source SHA256 and inspect ARM64 linker definitions
+        run: |
+          set -euo pipefail
+          mkdir -p reports source
+          gdown --fuzzy 'https://drive.google.com/file/d/1Zs5561S0TRsdFdQ_wSTqw--IoYcZiL4s/view' -O kernel.tar.gz
+          echo 'bc4b43d689e531e035ff8d4b08eec232bd36ce245f9eeb4c878c7d5ff141e10e  kernel.tar.gz' | sha256sum -c -
+          tar -tzf kernel.tar.gz | grep -E '^kernel_src/(arch/arm64|include|security)/.*(vmlinux[.]lds[.](S|h)|[.]lds[.]h|rkp[.]h|kdp[.]h)$' > reports/selected_paths.txt || true
+          echo 'kernel_src/arch/arm64/kernel/vmlinux.lds.S' >> reports/selected_paths.txt
+          sort -u reports/selected_paths.txt -o reports/selected_paths.txt
+          tar -xzf kernel.tar.gz -C source -T reports/selected_paths.txt
+          grep -RInE 'swapper_pg_dir|idmap_pg_dir|[.]uh_ro|[.]rkp_ro|[.]kdp_ro|BSS_FIRST_SECTIONS|RTIC_BSS' source/kernel_src/arch/arm64 source/kernel_src/include > reports/linker_refs.txt || true
+          grep -nE 'swapper_pg_dir|idmap_pg_dir|[.]uh_ro|RO_DATA_SECTION|BSS_SECTION|RTIC_BSS' source/kernel_src/arch/arm64/kernel/vmlinux.lds.S > reports/source_directives.txt || true
+          cp source/kernel_src/arch/arm64/kernel/vmlinux.lds.S reports/oem-arm64-vmlinux.lds.S
+          echo "References:"
+          cat reports/linker_refs.txt
+      - name: Upload linker research text only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-OEM-linker-source
+          retention-days: 7
+          path: reports/
