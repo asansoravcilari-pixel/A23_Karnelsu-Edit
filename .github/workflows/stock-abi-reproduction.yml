@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/stock-abi-reproduction.yml'
+      - 'scripts/build_stock_abi.sh'
+      - 'scripts/compare_kernel_config.py'
+      - 'configs/a235fxxseezb1_stock.config'
 permissions:
   contents: read
 jobs:
