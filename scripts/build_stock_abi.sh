@@ -30,11 +30,22 @@ python3 "$GITHUB_WORKSPACE/scripts/repair_vendor_source.py"
 # Samsung FIVE references a private driver header as an angle-bracket include.
 # Resolve the *same* local header via a relative path, preserving the types.
 FIVE_HEADER="security/samsung/five/five_porting.h"
-if grep -Fqx '#include <drivers/block/loop.h>' "$FIVE_HEADER"; then
-    test -f drivers/block/loop.h || { echo "FIVE dependency driver header missing" >&2; exit 42; }
-    sed -i 's@#include <drivers/block/loop.h>@#include "../../../drivers/block/loop.h"@' "$FIVE_HEADER"
-    echo "Corrected FIVE relative header lookup without disabling Samsung FIVE."
-fi
+test -f drivers/block/loop.h || { echo "FIVE dependency driver header missing" >&2; exit 42; }
+python3 - "$FIVE_HEADER" <<'PY'
+import re, stat, sys
+from pathlib import Path
+path=Path(sys.argv[1])
+s=path.read_text()
+pattern=r'(?m)^[ \\t]*#[ \\t]*include[ \\t]*[<"]drivers/block/loop\\.h[>"]'
+patched,count=re.subn(pattern, '#include "../../../drivers/block/loop.h"',s)
+if count != 1:
+    print("Unexpected FIVE header include count:", count)
+    print("Source references:",[line for line in s.splitlines() if "drivers/block/loop.h" in line])
+    raise SystemExit(43)
+path.chmod(path.stat().st_mode | stat.S_IWUSR)
+path.write_text(patched)
+print("FIVE security source header path fixed; original driver header reused")
+PY
 # The source ships both dynamic kprobes and legacy direct hooks.
 # CONFIG_KPROBES=y means hook variables are not defined by KernelSU.
 # Disable only the duplicate direct-call sites; keep dynamic kprobe support.
