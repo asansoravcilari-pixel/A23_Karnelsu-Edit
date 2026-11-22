@@ -95,6 +95,15 @@ make "${args[@]}" KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>
 mkdir -p "$WORK_DIR/result"
 cp out/.config "$WORK_DIR/result/kernel.config"
 find out/arch/arm64/boot -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name '*-dtb' \) -exec cp -v {} "$WORK_DIR/result/" \;
+# Module ABI diagnostics: prepare CRC symbol table and built modules for
+# comparison against the actual vendor qca_cld3_wlan.ko / rdbg.ko.
+test -s out/Module.symvers || { echo 'Module.symvers missing' >&2; exit 38; }
+cp out/Module.symvers "$WORK_DIR/result/"
+test -s out/System.map || { echo 'System.map missing' >&2; exit 39; }
+cp out/System.map "$WORK_DIR/result/"
+mkdir -p "$WORK_DIR/result/modules"
+find out -type f -name '*.ko' -exec cp -v {} "$WORK_DIR/result/modules/" \;
+printf '%s\n' 'NOTE: Vendor .ko files are NOT bundled, therefore ABI is not yet verified.' > "$WORK_DIR/result/ABI-STATUS.txt"
 ls -lah "$WORK_DIR/result"
 test -s "$WORK_DIR/result/Image" || test -s "$WORK_DIR/result/Image.gz"
 sha256sum "$WORK_DIR"/result/* | tee "$WORK_DIR/result/SHA256SUMS"

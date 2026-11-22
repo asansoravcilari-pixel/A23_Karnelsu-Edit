@@ -1,4 +1,4 @@
-name: SM-A235F KernelSU kernel build
+name: SM-A235F KernelSU ABI audit build
 on:
   workflow_dispatch:
   push:
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kernel_profile: [enforcing_panic0, selinux_off_experimental]
+        kernel_profile: [enforcing_panic0]
     steps:
       - uses: actions/checkout@v4
 
