@@ -71,7 +71,13 @@ echo "$PROFILE" > "$WORK_DIR/kernel_profile.txt"
 # scripts/config edits the generated config, NOT the source defconfig.
 # olddefconfig re-evaluates dependencies, particularly SELinux dependent flags.
 # Match OEM base: KPROBES is disabled in stock kernel, avoiding its ABI change.
-./scripts/config --file out/.config --disable LOCALVERSION_AUTO --disable KPROBES
+# Trust the original firmware's PUBLIC X.509 certificate for its existing signed
+# Wi-Fi and rdbg modules. This does not copy any private signing key.
+cp "$GITHUB_WORKSPACE/certs/a235fxxseezb1_oem_trusted.pem" certs/a235fxxseezb1_oem_trusted.pem
+openssl x509 -in certs/a235fxxseezb1_oem_trusted.pem -noout -serial | tee "$WORK_DIR/result/OEM-cert-serial.txt"
+grep -qi '7C2B781205C5CF85AA1BCD9242CD1E4E4FD12AFF' "$WORK_DIR/result/OEM-cert-serial.txt" || { echo 'OEM cert mismatch' >&2; exit 44; }
+./scripts/config --file out/.config --disable LOCALVERSION_AUTO --disable KPROBES \
+    --set-str SYSTEM_TRUSTED_KEYS certs/a235fxxseezb1_oem_trusted.pem
 if [[ "$PROFILE" == "stock_baseline" ]]; then
     ./scripts/config --file out/.config --disable KSU
 else
