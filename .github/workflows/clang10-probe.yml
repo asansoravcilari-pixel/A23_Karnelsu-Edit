@@ -1,0 +1,34 @@
+name: SM-A235F Original Clang 10 Toolchain Probe (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/clang10-probe.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official Android historical Clang 10 using shallow sparse checkout
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          git clone --depth 1 --filter=blob:none --sparse -b android11-qpr1-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 compiler-src
+          git -C compiler-src sparse-checkout set clang-r370808
+          test -x compiler-src/clang-r370808/bin/clang
+          compiler-src/clang-r370808/bin/clang --version | tee reports/clang-version.txt
+          sha256sum compiler-src/clang-r370808/bin/clang | tee reports/clang-sha256.txt
+          printf 'int identity(int x){return x;}\n' | compiler-src/clang-r370808/bin/clang --target=aarch64-linux-gnu -x c -c -o /tmp/a23-clang10-smoke.o -
+          file /tmp/a23-clang10-smoke.o | tee reports/smoke-filetype.txt
+          echo 'Reference firmware declares clang version 10.0.7 for Android NDK' >> reports/clang-version.txt
+      - name: Upload toolchain identity evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-Clang10-identity-probe
+          retention-days: 7
+          if-no-files-found: warn
+          path: reports/
