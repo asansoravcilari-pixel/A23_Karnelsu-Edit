@@ -16,10 +16,10 @@ else
 fi
 
 echo "${EXPECTED_SHA256}  source.tar.gz" | sha256sum --check -
-# Exact OEM Android boot containing embedded CONFIG_IKCONFIG; verified by SHA256.
-BOOT_ID="1vOVCs9nDEbmRDiLcyTM91TlciWRcpm3S"
-gdown --fuzzy "https://drive.google.com/file/d/${BOOT_ID}/view" -O stock-boot.img
-python3 "$GITHUB_WORKSPACE/scripts/extract_stock_boot_config.py" stock-boot.img stock.config
+# Exact OEM IKCONFIG has been verified against uploaded original boot.
+# Bundled in this GitHub repository: no private boot.img download required.
+cp "$GITHUB_WORKSPACE/configs/a235fxxseezb1_stock.config" stock.config
+echo '967db7ebc0389dc053d40e3747056af303959d826fd028a030377e2279e4cfc1  stock.config' | sha256sum --check -
 
 tar -tzf source.tar.gz > "$WORK_DIR/archive-files.txt"
 grep -qx 'kernel_src/Makefile' "$WORK_DIR/archive-files.txt"
