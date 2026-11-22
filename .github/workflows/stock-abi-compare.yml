@@ -25,11 +25,19 @@ jobs:
       - name: Get completed stock-profile artifact
         run: |
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n "SM-A235F-stock-abi-${{ matrix.profile }}" -D kernel-output
+          if [[ ! -s kernel-output/result/Module.symvers && -s kernel-output/result/linker/Module.symvers ]]; then
+            mkdir -p kernel-output/result
+            cp kernel-output/result/linker/Module.symvers kernel-output/result/Module.symvers
+          fi
           test -s kernel-output/result/Module.symvers
       - name: Compare OEM CRC without bypassing checks
         run: |
           mkdir -p reports
           python3 scripts/compare_oem_crc.py stock-reference/stock_module_crc.tsv kernel-output/result/Module.symvers "reports/${{ matrix.profile }}-ABI.txt"
+          if [[ "${{ github.event.workflow_run.conclusion }}" != 'success' ]]; then
+            echo 'BUILD FAILED: even matching CRC values would be preliminary only, never flash.' | tee -a "reports/${{ matrix.profile }}-ABI.txt"
+            exit 1
+          fi
       - name: Preserve comparison report, including failure evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,8 +62,12 @@ jobs:
         run: |
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n SM-A235F-stock-abi-stock_baseline -D baseline
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n SM-A235F-stock-abi-stock_ksu_directhooks -D ksu
-          test -s baseline/result/Module.symvers
-          test -s ksu/result/Module.symvers
+          for dir in baseline ksu; do
+            if [[ ! -s "$dir/result/Module.symvers" && -s "$dir/result/linker/Module.symvers" ]]; then
+              cp "$dir/result/linker/Module.symvers" "$dir/result/Module.symvers"
+            fi
+            test -s "$dir/result/Module.symvers"
+          done
       - name: Classify which symbols changed due to KernelSU
         run: |
           mkdir -p reports
