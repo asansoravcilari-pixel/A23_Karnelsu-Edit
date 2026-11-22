@@ -1,0 +1,35 @@
+name: SM-A235F APatch official tools package
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/apatch-tools.yml']
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Obtain official KernelPatch binaries and official APatch manager APK
+        run: |
+          set -euo pipefail
+          mkdir -p kit
+          base='https://github.com/bmax121/KernelPatch/releases/download/0.13.9'
+          curl -fL --retry 3 --connect-timeout 15 -o kit/kptools-linux "$base/kptools-linux"
+          curl -fL --retry 3 --connect-timeout 15 -o kit/kpimg-android "$base/kpimg-android"
+          curl -fL --retry 3 --connect-timeout 15 -o kit/kpimg-linux "$base/kpimg-linux"
+          curl -fL --retry 3 --connect-timeout 15 -o kit/kptools-android "$base/kptools-android"
+          curl -fL --retry 3 --connect-timeout 15 -o kit/APatch_11282_e8e4651_HEAD-release-signed.apk \
+            'https://github.com/bmax121/APatch/releases/download/11282/APatch_11282_e8e4651_HEAD-release-signed.apk'
+          chmod +x kit/kptools-linux
+          kit/kptools-linux --version | tee kit/tool-version.txt
+          ( cd kit && sha256sum kptools-linux kpimg-android kpimg-linux kptools-android APatch_11282_e8e4651_HEAD-release-signed.apk > SHA256SUMS )
+          echo "Original stock boot.img is NOT uploaded or patched in GitHub."
+      - name: Share official binary kit for local, private boot-image analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-official-APatch-0.13.9-11282-tools
+          retention-days: 7
+          path: kit/
