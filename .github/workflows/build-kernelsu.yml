@@ -15,6 +15,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel_profile: [enforcing_panic0, selinux_off_experimental]
     steps:
       - uses: actions/checkout@v4
 
@@ -28,16 +32,19 @@ jobs:
         env:
           WORK_DIR: ${{ github.workspace }}/a23-build
           JOBS: '4'
+          KERNEL_PROFILE: ${{ matrix.kernel_profile }}
         run: bash scripts/build_kernelsu.sh
 
       - name: Upload kernel and diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SM-A235F-KernelSU-build
+          name: SM-A235F-KernelSU-${{ matrix.kernel_profile }}
           if-no-files-found: warn
           retention-days: 7
           path: |
             a23-build/result/**
+            a23-build/kernel_profile.txt
+            a23-build/kernel-prebuild.config
             a23-build/config.log
             a23-build/build.log

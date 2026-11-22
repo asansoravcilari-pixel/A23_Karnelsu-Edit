@@ -45,7 +45,36 @@ done
 mkdir -p out
 args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 LD=aarch64-linux-gnu-ld HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y)
 make "${args[@]}" vendor/a23_eur_open_defconfig 2>&1 | tee "$WORK_DIR/config.log"
-grep -q '^CONFIG_KSU=y' out/.config || { echo 'KernelSU was lost in config'; exit 15; }
+# Two separately labelled RESEARCH builds. Never flash either from CI.
+PROFILE="${KERNEL_PROFILE:-enforcing_panic0}"
+case "$PROFILE" in
+    enforcing_panic0|selinux_off_experimental) ;;
+    *) echo "Unknown KERNEL_PROFILE: $PROFILE" >&2; exit 30 ;;
+esac
+echo "$PROFILE" > "$WORK_DIR/kernel_profile.txt"
+# scripts/config edits the generated config, NOT the source defconfig.
+# olddefconfig re-evaluates dependencies, particularly SELinux dependent flags.
+./scripts/config --file out/.config --set-val PANIC_TIMEOUT 0 --disable PANIC_ON_OOPS
+if [[ "$PROFILE" == "enforcing_panic0" ]]; then
+    ./scripts/config --file out/.config --enable SECURITY_SELINUX --enable DEFAULT_SECURITY_SELINUX
+else
+    ./scripts/config --file out/.config --disable SECURITY_SELINUX \
+        --disable DEFAULT_SECURITY_SELINUX --enable DEFAULT_SECURITY_DAC
+fi
+make "${args[@]}" olddefconfig 2>&1 | tee -a "$WORK_DIR/config.log"
+grep -qx 'CONFIG_KSU=y' out/.config || { echo 'KernelSU lost after olddefconfig' >&2; exit 31; }
+grep -qx 'CONFIG_PANIC_TIMEOUT=0' out/.config || { echo 'PANIC_TIMEOUT did not apply' >&2; exit 32; }
+if [[ "$PROFILE" == "enforcing_panic0" ]]; then
+    grep -qx 'CONFIG_SECURITY_SELINUX=y' out/.config || { echo 'SELinux not enabled' >&2; exit 33; }
+else
+    grep -qx '# CONFIG_SECURITY_SELINUX is not set' out/.config || { echo 'SELinux not disabled' >&2; exit 34; }
+    grep -qx 'CONFIG_DEFAULT_SECURITY="dac"' out/.config || { echo 'Expected DAC security default missing' >&2; exit 35; }
+    if grep -qx 'CONFIG_SECURITY_SELINUX_DEVELOP=y' out/.config; then
+        echo 'Stale SELinux-dependent config option' >&2; exit 36
+    fi
+fi
+cp out/.config "$WORK_DIR/kernel-prebuild.config"
+echo "Profile verified: $PROFILE" | tee -a "$WORK_DIR/config.log"
 # Clang 14 emits unused-but-set-variable as -Werror in legacy Qualcomm audio sources.
 # Demote ONLY this diagnostic; preserve all other compiler errors and driver behavior.
 make "${args[@]}" KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
