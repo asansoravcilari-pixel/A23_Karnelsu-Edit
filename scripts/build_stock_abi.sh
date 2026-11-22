@@ -46,6 +46,35 @@ path.chmod(path.stat().st_mode | stat.S_IWUSR)
 path.write_text(patched)
 print("FIVE security source header path fixed; original driver header reused")
 PY
+# Samsung's FIVE sources also include private source-root security headers
+# without adding the source root to their local include path. Rewrite ONLY
+# resolvable paths to their exact existing files; no code or types are changed.
+python3 - <<'PY'
+import os, re, stat
+from pathlib import Path
+root=Path.cwd()
+where=root/"security/samsung/five"
+if not where.is_dir():raise SystemExit("FIVE source directory missing")
+matcher=re.compile(r'(?m)^([ \t]*#[ \t]*include[ \t]*)([<"])((?:security|drivers)/[^>"]+)([>"])')
+rewritten=[]
+for path in sorted(where.rglob("*")):
+    if path.suffix not in {".c",".h"} or not path.is_file(): continue
+    original=path.read_text()
+    def fix(m):
+        relative=m.group(3)
+        referent=root/relative
+        if not referent.is_file():
+            return m.group(0)
+        substitute=os.path.relpath(referent,path.parent)
+        rewritten.append((str(path.relative_to(root)),relative,substitute))
+        return m.group(1)+'"'+substitute+'"'
+    patched=matcher.sub(fix,original)
+    if patched!=original:
+        path.chmod(path.stat().st_mode | stat.S_IWUSR)
+        path.write_text(patched)
+print("FIVE source-root include fixes:",len(rewritten))
+for x in rewritten:print("FIVE include:",*x)
+PY
 # The source ships both dynamic kprobes and legacy direct hooks.
 # CONFIG_KPROBES=y means hook variables are not defined by KernelSU.
 # Disable only the duplicate direct-call sites; keep dynamic kprobe support.
