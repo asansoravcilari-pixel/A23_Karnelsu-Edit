@@ -1,0 +1,84 @@
+name: SM-A235F Vendor ABI Audit (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vendor-abi.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VENDOR_ID: 1w5XZiAfK0_2y_uF4Ik8dBF8Hb0Q1_AUq
+      EXPECTED_BYTES: '1204884856'
+      KERNEL_RUN: '45073290632'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install required tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-pip file f2fs-tools android-sdk-libsparse-utils
+          python3 -m pip install --break-system-packages 'gdown>=5.2,<6'
+          mkdir -p reports
+      - name: Download and validate stock vendor archive
+        run: |
+          set -euo pipefail
+          gdown --fuzzy "https://drive.google.com/file/d/$VENDOR_ID/view" -O a235f_vendor.tar.gz
+          ACTUAL="$(stat -c '%s' a235f_vendor.tar.gz)"
+          echo "Archive bytes: $ACTUAL" | tee reports/vendor_archive.txt
+          [[ "$ACTUAL" == "$EXPECTED_BYTES" ]] || { echo 'Wrong archive size' >&2; exit 20; }
+          sha256sum a235f_vendor.tar.gz | tee -a reports/vendor_archive.txt
+          gzip -t a235f_vendor.tar.gz
+          tar -tzf a235f_vendor.tar.gz > reports/archive_entries.txt
+          ENTRY="$(grep -E '(^|/)vendor[.]img$' reports/archive_entries.txt | head -n 1)"
+          [[ -n "$ENTRY" ]] || { echo 'vendor.img missing' >&2; exit 21; }
+          mkdir -p extracted
+          tar -xzf a235f_vendor.tar.gz -C extracted "$ENTRY"
+          VENDOR_IMAGE="$(find "$PWD/extracted" -type f -name 'vendor.img' -print -quit)"
+          [[ -s "$VENDOR_IMAGE" ]] || { echo 'vendor image missing or empty' >&2; exit 22; }
+          echo "VENDOR_IMAGE=$VENDOR_IMAGE" >> "$GITHUB_ENV"
+          rm -f a235f_vendor.tar.gz
+      - name: Mount stock image read only and inventory .ko drivers
+        run: |
+          set -euo pipefail
+          file "$VENDOR_IMAGE" | tee reports/vendor_filetype.txt
+          if file "$VENDOR_IMAGE" | grep -qi 'Android sparse'; then
+            simg2img "$VENDOR_IMAGE" vendor.raw.img
+            VENDOR_IMAGE="$PWD/vendor.raw.img"
+          fi
+          sudo mkdir -p /mnt/a235f_vendor
+          sudo mount -t f2fs -o ro,loop "$VENDOR_IMAGE" /mnt/a235f_vendor || sudo mount -o ro,loop "$VENDOR_IMAGE" /mnt/a235f_vendor
+          find /mnt/a235f_vendor -type f -name '*.ko' | sort | tee reports/vendor_ko_paths.txt
+          test -s reports/vendor_ko_paths.txt
+          (grep -E '^ro.vendor.build.fingerprint=|^ro.vendor.build.version.release=' /mnt/a235f_vendor/build.prop || true) | tee reports/vendor_fingerprint.txt
+      - name: Obtain matching KernelSU Module.symvers from run 15
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if gh run download "$KERNEL_RUN" --repo "$GITHUB_REPOSITORY" -n 'SM-A235F-KernelSU-enforcing_panic0' -D kernel_artifact; then break; fi
+            echo "Artifact not available (attempt $i)"
+            sleep 25
+          done
+          test -s kernel_artifact/result/Module.symvers
+          test -s kernel_artifact/result/kernel.config
+          grep -qx 'CONFIG_KSU=y' kernel_artifact/result/kernel.config
+          grep -qx 'CONFIG_MODVERSIONS=y' kernel_artifact/result/kernel.config
+          grep -qx 'CONFIG_SECURITY_SELINUX=y' kernel_artifact/result/kernel.config
+          grep -qx 'CONFIG_PANIC_TIMEOUT=0' kernel_artifact/result/kernel.config
+      - name: Compare vermagic and imported symbol CRCs
+        run: |
+          set -euo pipefail
+          python3 scripts/check_vendor_abi.py kernel_artifact/result/Module.symvers /mnt/a235f_vendor | tee reports/module_abi_report.txt
+      - name: Publish text-only report, not firmware or modules
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-vendor-ABI-report
+          retention-days: 7
+          if-no-files-found: warn
+          path: reports/
