@@ -6,6 +6,33 @@ SOURCE_ID="${SOURCE_ID:-1Zs5561S0TRsdFdQ_wSTqw--IoYcZiL4s}"
 EXPECTED_SHA256="bc4b43d689e531e035ff8d4b08eec232bd36ce245f9eeb4c878c7d5ff141e10e"
 WORK_DIR="${WORK_DIR:-$PWD/stock-abi-work}"
 mkdir -p "$WORK_DIR"
+# Preserve linker evidence even if vmlinux cannot be linked.
+collect_build_diagnostics() {
+    local exit_code=$?
+    if (( exit_code != 0 )); then
+        local outdir="$WORK_DIR/unpack/kernel_src/out"
+        mkdir -p "$WORK_DIR/result/linker"
+        for path in "$outdir/arch/arm64/kernel/vmlinux.lds" "$outdir/Module.symvers" "$outdir/.config"; do
+            if [[ -s "$path" ]]; then
+                cp "$path" "$WORK_DIR/result/linker/$(basename "$path")"
+            fi
+        done
+        if [[ -s "$outdir/arch/arm64/kernel/vmlinux.lds" ]]; then
+            { echo 'Generated linker-script lines 45-110:';
+              nl -ba "$outdir/arch/arm64/kernel/vmlinux.lds" | sed -n '45,110p';
+              echo 'BSS and RTIC references:';
+              grep -n -E 'RTIC|\.bss|_end|0xffffff' "$outdir/arch/arm64/kernel/vmlinux.lds" | head -120 || true;
+            } > "$WORK_DIR/result/linker/linker-layout-analysis.txt"
+        fi
+        if [[ -s "$outdir/vmlinux.o" ]]; then
+            aarch64-linux-gnu-readelf -W -S "$outdir/vmlinux.o" > "$WORK_DIR/result/linker/vmlinux-o-sections.txt" || true
+            aarch64-linux-gnu-nm -n "$outdir/vmlinux.o" |
+              grep -E '__bss|_end|__rtic|__start' | head -120 > "$WORK_DIR/result/linker/vmlinux-o-symbols.txt" || true
+        fi
+        echo "Build exited $exit_code; static linker diagnostics preserved" >&2
+    fi
+}
+trap collect_build_diagnostics EXIT
 cd "$WORK_DIR"
 
 if [[ -n "${SOURCE_ARCHIVE:-}" && -s "${SOURCE_ARCHIVE}" ]]; then
