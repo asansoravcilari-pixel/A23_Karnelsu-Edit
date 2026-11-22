@@ -63,6 +63,28 @@ devre dışı bırakır; panic veya donanım watchdog arızasını önlemez.
 - Eski başarılı 15 numaralı çekirdeğin OEM modül CRC sonucu
   **Wi-Fi 209, rdbg 20 uyumsuz** kaldığı için bu çekirdek flash edilemez.
 
+## 8–10 numaralı denemeler: Samsung UH/RKP linker çift yerleştirmesi
+
+- Üretilmiş `vmlinux.lds` dosyasında sayfa tabloları
+  `idmap_pg_dir` ve `swapper_pg_dir` **iki defa** yer alıyordu:
+  `.uh_ro` içinde ve `BSS_SECTION` sonrasında.
+- Kök kaynak: `include/asm-generic/vmlinux.lds.h` dosyasındaki
+  `CONFIG_RKP` + `CONFIG_UH` korumalı sayfa tablosu ayırımı ile
+  `arch/arm64/kernel/vmlinux.lds.S` dosyasındaki koşulsuz ARM64
+  ayırımı birlikte etkin.
+- `scripts/fix_samsung_uh_linker.py` yalnızca ARM64'ün **tekrarlı**
+  BSS-sonrası blokunu `#if !defined(CONFIG_RKP) || !defined(CONFIG_UH)`
+  koşuluna alır; Samsung UH/RKP'nin korumalı `.uh_ro` blokunu,
+  `FIVE`, `KDP`, `SELinux` ayarlarını değiştirmez.
+- Düzeltmenin kaynak metni üzerindeki eşleşmesi doğrulandı. Henüz
+  oluşan çekirdeğin link, ABI ve cihaz testlerinin geçeceği doğrulanmadı.
+- 8 numaralı stok build bağlantıda başarısız olsa da elde edilmiş
+  `Module.symvers` OEM Wi-Fi için **270 eşleşen/138 farklı**,
+  `rdbg.ko` için **28 eşleşen/6 farklı** CRC göstermiştir.
+  Eski KernelSU build'inde karşılıkları Wi-Fi 199/209, rdbg 14/20 idi.
+- Tam kernel bağlanmadığı için bunlar **diagnostik ön sonuçlardır**;
+  hiçbir koşulda flash onayı değildir.
+
 ## Flash kapısı
 
 Aşağıdakilerin *tamamı* gerçekleşene kadar **Odin/flash YASAK**:
