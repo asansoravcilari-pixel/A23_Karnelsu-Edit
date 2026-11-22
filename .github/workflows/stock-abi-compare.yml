@@ -38,3 +38,33 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
           path: reports/
+
+  abi_delta:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve original Samsung CRC metadata
+        run: |
+          gh run download 45077059624 --repo "$GITHUB_REPOSITORY" -n SM-A235F-OEM-CRC-reference -D stock-reference
+          test -s stock-reference/stock_module_crc.tsv
+      - name: Retrieve both complete build ABI tables
+        run: |
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n SM-A235F-stock-abi-stock_baseline -D baseline
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n SM-A235F-stock-abi-stock_ksu_directhooks -D ksu
+          test -s baseline/result/Module.symvers
+          test -s ksu/result/Module.symvers
+      - name: Classify which symbols changed due to KernelSU
+        run: |
+          mkdir -p reports
+          python3 scripts/explain_stock_abi_delta.py stock-reference/stock_module_crc.tsv baseline/result/Module.symvers ksu/result/Module.symvers reports/stock_vs_ksu_abi_delta.txt
+      - name: Preserve full comparison even if the ABI test fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-stock-vs-ksu-ABI-delta
+          retention-days: 7
+          if-no-files-found: warn
+          path: reports/
