@@ -59,7 +59,8 @@ if [[ "$PROFILE" == "enforcing_panic0" ]]; then
     ./scripts/config --file out/.config --enable SECURITY_SELINUX --enable DEFAULT_SECURITY_SELINUX
 else
     ./scripts/config --file out/.config --disable SECURITY_SELINUX \
-        --disable DEFAULT_SECURITY_SELINUX --enable DEFAULT_SECURITY_DAC
+        --disable DEFAULT_SECURITY_SELINUX --enable DEFAULT_SECURITY_DAC \
+        --set-str DEFAULT_SECURITY dac
 fi
 make "${args[@]}" olddefconfig 2>&1 | tee -a "$WORK_DIR/config.log"
 grep -qx 'CONFIG_KSU=y' out/.config || { echo 'KernelSU lost after olddefconfig' >&2; exit 31; }
