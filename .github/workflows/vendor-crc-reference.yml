@@ -1,0 +1,49 @@
+name: SM-A235F OEM Vendor CRC Reference (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/vendor-crc-reference.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install archive and F2FS tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends f2fs-tools python3-pip file
+          python3 -m pip install --break-system-packages 'gdown>=5.2,<6'
+          mkdir -p reports stock-modules
+      - name: Download exact OEM vendor archive from connected Drive file
+        run: |
+          set -euo pipefail
+          gdown --fuzzy 'https://drive.google.com/file/d/1w5XZiAfK0_2y_uF4Ik8dBF8Hb0Q1_AUq/view' -O vendor.tar.gz
+          echo '7ac5fd2c8e002e92965fa5916191135c7ea2ee90f6fab8764e22f9d5abef280a  vendor.tar.gz' | sha256sum -c -
+          gzip -t vendor.tar.gz
+          tar -tzf vendor.tar.gz > reports/vendor_entries.txt
+          test "$(grep -cx 'vendor.img' reports/vendor_entries.txt)" = 1
+          tar -xzf vendor.tar.gz vendor.img
+          file vendor.img | tee reports/vendor.img.filetype.txt
+          rm vendor.tar.gz
+      - name: Read stock modules from F2FS without modifying them
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /mnt/samsung_vendor
+          sudo mount -t f2fs -o ro,loop vendor.img /mnt/samsung_vendor
+          sudo cp /mnt/samsung_vendor/lib/modules/qca_cld3_wlan.ko stock-modules/
+          sudo cp /mnt/samsung_vendor/lib/modules/rdbg.ko stock-modules/
+          sudo chown -R "$(id -u):$(id -g)" stock-modules
+          sudo umount /mnt/samsung_vendor
+          python3 scripts/extract_vendor_crc.py stock-modules reports/stock_module_crc.tsv
+          wc -l reports/stock_module_crc.tsv
+      - name: Upload metadata only (not vendor binary files)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-OEM-CRC-reference
+          retention-days: 7
+          path: reports/
