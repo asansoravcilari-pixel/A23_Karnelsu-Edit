@@ -106,5 +106,7 @@ find out -type f -name '*.ko' -exec cp -v {} "$WORK_DIR/result/modules/" \;
 printf '%s\n' 'NOTE: Vendor .ko files are NOT bundled, therefore ABI is not yet verified.' > "$WORK_DIR/result/ABI-STATUS.txt"
 ls -lah "$WORK_DIR/result"
 test -s "$WORK_DIR/result/Image" || test -s "$WORK_DIR/result/Image.gz"
-sha256sum "$WORK_DIR"/result/* | tee "$WORK_DIR/result/SHA256SUMS"
+# Hash regular files recursively. The result/modules/ directory must not be
+# passed to sha256sum as a file (that would fail the completed build job).
+( cd "$WORK_DIR/result" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 -r sha256sum ) | tee "$WORK_DIR/result/SHA256SUMS"
 echo "Build outputs ready for validation; this is NOT a flashable boot.img."
