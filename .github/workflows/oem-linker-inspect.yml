@@ -28,6 +28,7 @@ jobs:
           grep -RInE 'swapper_pg_dir|idmap_pg_dir|[.]uh_ro|[.]rkp_ro|[.]kdp_ro|BSS_FIRST_SECTIONS|RTIC_BSS' source/kernel_src/arch/arm64 source/kernel_src/include > reports/linker_refs.txt || true
           grep -nE 'swapper_pg_dir|idmap_pg_dir|[.]uh_ro|RO_DATA_SECTION|BSS_SECTION|RTIC_BSS' source/kernel_src/arch/arm64/kernel/vmlinux.lds.S > reports/source_directives.txt || true
           cp source/kernel_src/arch/arm64/kernel/vmlinux.lds.S reports/oem-arm64-vmlinux.lds.S
+          cp source/kernel_src/include/asm-generic/vmlinux.lds.h reports/oem-asm-generic-vmlinux.lds.h
           echo "References:"
           cat reports/linker_refs.txt
       - name: Upload linker research text only
