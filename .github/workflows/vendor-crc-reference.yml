@@ -40,6 +40,15 @@ jobs:
           sudo umount /mnt/samsung_vendor
           python3 scripts/extract_vendor_crc.py stock-modules reports/stock_module_crc.tsv
           wc -l reports/stock_module_crc.tsv
+          {
+            for module in stock-modules/*.ko; do
+              echo "MODULE: $(basename "$module")"
+              echo "SIGNER: $(modinfo -F signer "$module" || true)"
+              echo "SIGNATURE_KEY: $(modinfo -F sig_key "$module" || true)"
+              echo "SIGNATURE_HASH: $(modinfo -F sig_hashalgo "$module" || true)"
+              echo "SIG_ID: $(modinfo -F sig_id "$module" || true)"
+            done
+          } > reports/vendor_module_signatures.txt
       - name: Upload metadata only (not vendor binary files)
         if: always()
         uses: actions/upload-artifact@v4
