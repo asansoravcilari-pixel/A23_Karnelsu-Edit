@@ -53,7 +53,7 @@ jobs:
           fi
           sudo mkdir -p /mnt/a235f_vendor
           sudo mount -t f2fs -o ro,loop "$VENDOR_IMAGE" /mnt/a235f_vendor || sudo mount -o ro,loop "$VENDOR_IMAGE" /mnt/a235f_vendor
-          find /mnt/a235f_vendor -type f -name '*.ko' | sort | tee reports/vendor_ko_paths.txt
+          find /mnt/a235f_vendor/lib/modules -type f -name '*.ko' | sort | tee reports/vendor_ko_paths.txt
           test -s reports/vendor_ko_paths.txt
           (grep -E '^ro.vendor.build.fingerprint=|^ro.vendor.build.version.release=' /mnt/a235f_vendor/build.prop || true) | tee reports/vendor_fingerprint.txt
       - name: Obtain matching KernelSU Module.symvers from run 15
@@ -73,7 +73,7 @@ jobs:
       - name: Compare vermagic and imported symbol CRCs
         run: |
           set -euo pipefail
-          python3 scripts/check_vendor_abi.py kernel_artifact/result/Module.symvers /mnt/a235f_vendor | tee reports/module_abi_report.txt
+          python3 scripts/check_vendor_abi.py kernel_artifact/result/Module.symvers /mnt/a235f_vendor/lib/modules | tee reports/module_abi_report.txt
       - name: Publish text-only report, not firmware or modules
         if: always()
         uses: actions/upload-artifact@v4
