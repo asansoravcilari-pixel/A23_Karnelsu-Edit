@@ -43,7 +43,7 @@ for cmd in clang-14 ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readel
     command -v "$cmd" >/dev/null || { echo "Tool missing: $cmd"; exit 14; }
 done
 mkdir -p out
-args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 LD=aarch64-linux-gnu-ld HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y)
+args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 LD=aarch64-linux-gnu-ld HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y LOCALVERSION=-28692735-abA235FXXSEEZB1)
 make "${args[@]}" vendor/a23_eur_open_defconfig 2>&1 | tee "$WORK_DIR/config.log"
 # Two separately labelled RESEARCH builds. Never flash either from CI.
 PROFILE="${KERNEL_PROFILE:-enforcing_panic0}"
@@ -55,7 +55,7 @@ echo "$PROFILE" > "$WORK_DIR/kernel_profile.txt"
 # scripts/config edits the generated config, NOT the source defconfig.
 # olddefconfig re-evaluates dependencies, particularly SELinux dependent flags.
 ./scripts/config --file out/.config --set-val PANIC_TIMEOUT 0 --disable PANIC_ON_OOPS \
-    --set-str LOCALVERSION '-perf-28692735-abA235FXXSEEZB1' --disable LOCALVERSION_AUTO
+    --disable LOCALVERSION_AUTO
 if [[ "$PROFILE" == "enforcing_panic0" ]]; then
     ./scripts/config --file out/.config --enable SECURITY_SELINUX --enable DEFAULT_SECURITY_SELINUX
 else
