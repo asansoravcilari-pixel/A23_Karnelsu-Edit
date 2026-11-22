@@ -1,0 +1,40 @@
+name: SM-A235F Compare Build CRC Against Original Drivers
+on:
+  workflow_run:
+    workflows: ["SM-A235F Stock ABI Reproduction (experimental)"]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  abi_gate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [stock_baseline, stock_ksu_directhooks]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get stock module CRC reference
+        run: |
+          gh run download 45077059624 --repo "$GITHUB_REPOSITORY" -n SM-A235F-OEM-CRC-reference -D stock-reference
+          test -s stock-reference/stock_module_crc.tsv
+      - name: Get completed stock-profile artifact
+        run: |
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n "SM-A235F-stock-abi-${{ matrix.profile }}" -D kernel-output
+          test -s kernel-output/result/Module.symvers
+      - name: Compare OEM CRC without bypassing checks
+        run: |
+          mkdir -p reports
+          python3 scripts/compare_oem_crc.py stock-reference/stock_module_crc.tsv kernel-output/result/Module.symvers "reports/${{ matrix.profile }}-ABI.txt"
+      - name: Preserve comparison report, including failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-${{ matrix.profile }}-CRC-report
+          retention-days: 7
+          if-no-files-found: warn
+          path: reports/
