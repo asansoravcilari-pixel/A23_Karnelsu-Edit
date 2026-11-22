@@ -40,6 +40,25 @@ devre dışı bırakır; panic veya donanım watchdog arızasını önlemez.
 7. OEM imzası için `CONFIG_MODULE_SIG_FORCE` ve güvenilir açık
    X.509 sertifikasını ayrıca doğrulayın.
 
+## 23 Kasım 2026: Stok ABI yeniden üretim bulguları
+
+- Stok `boot.img` içindeki derleyici kimliği: **clang 10.0.7 for Android NDK**
+  ve GNU ld 2.27.0.20170315. Bu bilgi doğrudan kernel sürüm dizesinden
+  okunmuştur; yalnızca `CONFIG_CLANG_VERSION` değerine dayanmaz.
+- Google Android'in resmî tarihsel `clang-r370808` paketini Linux runner
+  üzerinde çalıştırdık; sonuç **clang 10.0.1**, yani OEM'in tam derleyicisi
+  **değil**. Bu paketle derleyip CRC uyumunun garanti olduğunu varsaymayın.
+- 7 numaralı stok referans ve KernelSU direct-hook denemesi nesneleri
+  derledi; ancak `aarch64-linux-gnu-ld`, `vmlinux.lds:62` satırında
+  `cannot move location counter backwards` hatası verdi.
+  Bu, kernel adres/bellek yerleşimi uyuşmazlığıdır; CRC testi henüz geçmedi.
+- 8 numaralı denemede linker script, bölüm tablosu, ve oluştuysa
+  `Module.symvers` dosyası başarısız build'de de saklanacak şekilde
+  tanılama eklendi. Linker script dosyası incelenmeden adresleri,
+  `RKP`, `KDP` veya `FIVE` korumalarını rastgele değiştirmeyin.
+- Eski başarılı 15 numaralı çekirdeğin OEM modül CRC sonucu
+  **Wi-Fi 209, rdbg 20 uyumsuz** kaldığı için bu çekirdek flash edilemez.
+
 ## Flash kapısı
 
 Aşağıdakilerin *tamamı* gerçekleşene kadar **Odin/flash YASAK**:
