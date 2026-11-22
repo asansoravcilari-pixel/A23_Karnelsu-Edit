@@ -1,0 +1,45 @@
+name: SM-A235F Stock ABI Reproduction (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stock-abi-reproduction.yml'
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [stock_baseline, stock_ksu_directhooks]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell and Python syntax before downloading sources
+        run: |
+          bash -n scripts/build_stock_abi.sh
+          python3 -m py_compile scripts/extract_stock_boot_config.py scripts/compare_kernel_config.py
+      - name: Install original legacy kernel build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-14 lld-14 llvm-14 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu bc bison flex build-essential libssl-dev libelf-dev libncurses-dev zstd python3-pip
+          python3 -m pip install --break-system-packages 'gdown>=5.2,<6'
+      - name: Build exact stock IKCONFIG profile and collect ABI table
+        env:
+          WORK_DIR: ${{ github.workspace }}/stock-abi-work
+          JOBS: '4'
+          KERNEL_PROFILE: ${{ matrix.profile }}
+        run: bash scripts/build_stock_abi.sh
+      - name: Upload research outputs and diagnostic logs — never flash
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-stock-abi-${{ matrix.profile }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            stock-abi-work/result/**
+            stock-abi-work/config.log
+            stock-abi-work/build.log
