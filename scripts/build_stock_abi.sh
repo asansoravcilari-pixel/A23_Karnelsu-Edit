@@ -27,6 +27,14 @@ mkdir -p unpack
 tar -xzf source.tar.gz -C unpack --no-same-owner
 cd unpack/kernel_src
 python3 "$GITHUB_WORKSPACE/scripts/repair_vendor_source.py"
+# Samsung FIVE references a private driver header as an angle-bracket include.
+# Resolve the *same* local header via a relative path, preserving the types.
+FIVE_HEADER="security/samsung/five/five_porting.h"
+if grep -Fqx '#include <drivers/block/loop.h>' "$FIVE_HEADER"; then
+    test -f drivers/block/loop.h || { echo "FIVE dependency driver header missing" >&2; exit 42; }
+    sed -i 's@#include <drivers/block/loop.h>@#include "../../../drivers/block/loop.h"@' "$FIVE_HEADER"
+    echo "Corrected FIVE relative header lookup without disabling Samsung FIVE."
+fi
 # The source ships both dynamic kprobes and legacy direct hooks.
 # CONFIG_KPROBES=y means hook variables are not defined by KernelSU.
 # Disable only the duplicate direct-call sites; keep dynamic kprobe support.
