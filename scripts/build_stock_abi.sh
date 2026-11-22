@@ -51,6 +51,7 @@ mkdir -p out
 args=(ARCH=arm64 O="$PWD/out" LLVM=1 CC=clang-14 LD=aarch64-linux-gnu-ld HOSTCC=gcc HOSTCXX=g++ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu- DTC_EXT="$PWD/tools/dtc" CONFIG_SECTION_MISMATCH_WARN_ONLY=y LOCALVERSION=-28692735-abA235FXXSEEZB1)
 make "${args[@]}" vendor/a23_eur_open_defconfig 2>&1 | tee "$WORK_DIR/config.log"
 cp "$WORK_DIR/stock.config" out/.config
+mkdir -p "$WORK_DIR/result"
 cp "$WORK_DIR/stock.config" "$WORK_DIR/result/stock.config"
 # Two separately labelled RESEARCH builds. Never flash either from CI.
 PROFILE="${KERNEL_PROFILE:-stock_baseline}"
