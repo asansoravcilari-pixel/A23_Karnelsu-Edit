@@ -48,6 +48,10 @@ devre dışı bırakır; panic veya donanım watchdog arızasını önlemez.
 - Google Android'in resmî tarihsel `clang-r370808` paketini Linux runner
   üzerinde çalıştırdık; sonuç **clang 10.0.1**, yani OEM'in tam derleyicisi
   **değil**. Bu paketle derleyip CRC uyumunun garanti olduğunu varsaymayın.
+- Tam `clang 10.0.7 for Android NDK` dizgesi Qualcomm'un **Snapdragon LLVM**
+  derleyicisine işaret ediyor; Qualcomm'un resmî dağıtım kaynağı
+  Qualcomm Software Center'dır. Resmî paket doğrulanmadan rastgele
+  üçüncü taraf toolchain binary'sini kernel üretimine eklemeyin.
 - 7 numaralı stok referans ve KernelSU direct-hook denemesi nesneleri
   derledi; ancak `aarch64-linux-gnu-ld`, `vmlinux.lds:62` satırında
   `cannot move location counter backwards` hatası verdi.
