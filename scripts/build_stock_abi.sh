@@ -54,6 +54,11 @@ mkdir -p unpack
 tar -xzf source.tar.gz -C unpack --no-same-owner
 cd unpack/kernel_src
 python3 "$GITHUB_WORKSPACE/scripts/repair_vendor_source.py"
+# Keep Samsung's RKP/UH page tables in protected .uh_ro; avoid the
+# duplicate allocation after BSS in the unmodified ARM64 linker script.
+grep -qx 'CONFIG_RKP=y' "$WORK_DIR/stock.config" || { echo 'Stock RKP not enabled' >&2; exit 45; }
+grep -qx 'CONFIG_UH=y' "$WORK_DIR/stock.config" || { echo 'Stock UH not enabled' >&2; exit 46; }
+python3 "$GITHUB_WORKSPACE/scripts/fix_samsung_uh_linker.py"
 # Samsung FIVE references a private driver header as an angle-bracket include.
 # Resolve the *same* local header via a relative path, preserving the types.
 FIVE_HEADER="security/samsung/five/five_porting.h"
