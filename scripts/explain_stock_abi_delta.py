@@ -9,26 +9,36 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-def syms(path):
-    result={}
-    for line in Path(path).read_text(errors="replace").splitlines():
-        parts=line.split()
-        if len(parts)>1:
-            try: result[parts[1]]=int(parts[0],16)&0xffffffff
-            except ValueError: pass
-    if not result: raise SystemExit("Missing export symbols in "+str(path))
-    return result
+from compare_oem_crc import load_exports, load_reference
+
+
+def verified_inputs(tsv, stock_sym, ksu_sym, output):
+    """Reject incomplete, tampered or ambiguous inputs before classifying CRCs."""
+    errors=[]
+    base=ksu=entries=None
+    try:
+        base=load_exports(Path(stock_sym), errors)
+        ksu=load_exports(Path(ksu_sym), errors)
+        entries=load_reference(Path(tsv), errors)
+    except (OSError, UnicodeError, ValueError, csv.Error) as exc:
+        errors.append(str(exc))
+    if errors:
+        report="SM-A235F ABI delta: FAIL CLOSED - invalid input\n"
+        report+="\n".join("ERROR "+error for error in errors)+"\n"
+        Path(output).parent.mkdir(parents=True,exist_ok=True)
+        Path(output).write_text(report)
+        raise SystemExit(report)
+    return base,ksu,entries
 
 def main():
     if len(sys.argv)!=5:
         raise SystemExit("usage: explain_stock_abi_delta.py stock_module_crc.tsv baseline.symvers ksu.symvers report.txt")
     tsv,stock_sym,ksu_sym,output = sys.argv[1:]
-    base=syms(stock_sym); ksu=syms(ksu_sym)
+    base,ksu,entries=verified_inputs(tsv,stock_sym,ksu_sym,output)
     counts=defaultdict(Counter)
     rows=[]
-    with Path(tsv).open() as f:
-        for item in csv.DictReader(f,delimiter="\t"):
-            module=item["module"]; symbol=item["symbol"]; oem=int(item["stock_crc"],16)
+    for module, symbols in entries.items():
+        for symbol, oem in symbols.items():
             b=base.get(symbol); k=ksu.get(symbol)
             if b is None or k is None: state="missing_export"
             elif b==oem and k==oem: state="both_match_oem"

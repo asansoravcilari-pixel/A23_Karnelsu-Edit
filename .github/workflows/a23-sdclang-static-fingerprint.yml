@@ -1,0 +1,46 @@
+name: A23 SDClang 10.0.7 static fingerprint (untrusted candidate)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/a23-sdclang-static-fingerprint.yml'
+  push:
+    branches: [codex/issue-1-a235f-abi-gate]
+    paths:
+      - '.github/workflows/a23-sdclang-static-fingerprint.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metadata-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Download a single commit-pinned external clang binary (DO NOT EXECUTE)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p evidence
+          # THIRD-PARTY MIRROR, NOT VERIFIED AS OFFICIAL QUALCOMM
+          # Only download for static identification; never run the downloaded file.
+          URL='https://raw.githubusercontent.com/sticpaper/Snapdragon-LLVM-ARM-Compiler-10.0.7-for-Android-NDK/a16fec82a8deaf8f742ea54f8de98c021af200d4/bin/clang'
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 600 --silent --show-error "$URL" -o evidence/clang.candidate
+          bytes="$(stat -c %s evidence/clang.candidate)"
+          echo "bytes=$bytes" | tee evidence/identity.txt
+          test "$bytes" = 96194392
+          blob_sha="$(git hash-object evidence/clang.candidate)"
+          echo "git_blob_sha1=$blob_sha" | tee -a evidence/identity.txt
+          test "$blob_sha" = 5b0eb56499f8d72312fb5f43df1950ad8e8b8ad5
+          sha256sum evidence/clang.candidate | sed 's#evidence/clang.candidate#bin/clang#' | tee evidence/sha256.txt
+          file evidence/clang.candidate | tee evidence/file.txt
+          readelf -h evidence/clang.candidate > evidence/elf-header.txt
+          readelf -d evidence/clang.candidate > evidence/elf-dynamic.txt || true
+          printf '%s\n' 'Candidate only; no binary was executed; no official Qualcomm hash comparison available.' > evidence/PROVENANCE_NOT_VERIFIED.txt
+          rm evidence/clang.candidate
+      - name: Upload small read-only fingerprint artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a23-sdclang1007-static-fingerprint
+          retention-days: 7
+          if-no-files-found: warn
+          path: evidence/*.txt

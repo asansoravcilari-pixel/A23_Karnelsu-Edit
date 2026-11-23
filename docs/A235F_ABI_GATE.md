@@ -85,7 +85,28 @@ devre dışı bırakır; panic veya donanım watchdog arızasını önlemez.
 - Tam kernel bağlanmadığı için bunlar **diagnostik ön sonuçlardır**;
   hiçbir koşulda flash onayı değildir.
 
+## 23 Kasım 2026: Sabit OEM referans ve tekrar ölçümü
+
+- GitHub Actions `45077059624` numaralı OEM referans çıktısındaki yalnızca metin
+  `stock_module_crc.tsv`, `references/a235fxxseezb1_stock_module_crc.tsv`
+  yolunda saklanır. SHA-256:
+  `8eb9e40c752dd0bdc2c0ada636a402516841adcd1348a706b4e3dbfcf3f1228a`.
+  Karşılaştırıcı hem 408/34 satır kapsamını hem bu özeti kontrol eder. Böylece
+  eşit sayıda ama başka semboller/CRC değerleri içeren referans reddedilir.
+- 8 numaralı başarısız link denemesinin iki `Module.symvers` çıktısı da aynı
+  144 uyumsuzluğu verdi. 10 numaralı stok profilinin başarılı derlemesinde de
+  aynı liste var: Wi-Fi 270 eşleşme/138 fark; rdbg 28 eşleşme/6 fark.
+  Tam sembol ve CRC listesi `docs/SM-A235F-B14-run10-CRC-report.txt` içindedir.
+- Bu ölçüm, farkların KernelSU kapalıyken de bulunduğunu gösterir. Kök neden
+  hâlâ saptanmadı: OEM'in kullandığı tam Snapdragon LLVM `clang 10.0.7 for
+  Android NDK` derleyici paketi ve OEM ile eşleşen modül üretim girdi/ayarları
+  burada bulunmuyor. Resmî paketin kimliği/hash'i doğrulanıp stok kaynakla
+  karşılaştırmalı derleme yapılmadan CRC eşitliği varsayılamaz.
+- Tam derleme, CRC eşitliği, OEM imza güveni ve cihaz açılışı ayrı aşamalardır;
+  bu çalışmada yalnızca derleme ve CRC karşılaştırma çıktıları incelendi.
+
 ## Flash kapısı
+
 
 Aşağıdakilerin *tamamı* gerçekleşene kadar **Odin/flash YASAK**:
 

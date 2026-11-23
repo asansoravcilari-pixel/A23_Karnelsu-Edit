@@ -1,0 +1,29 @@
+name: A23 Source Provenance Inventory Regression
+on:
+  pull_request:
+    paths:
+      - 'scripts/a235f_source_provenance.py'
+      - 'tests/test_a235f_source_provenance.py'
+      - '.github/workflows/a23-source-provenance-tests.yml'
+  push:
+    branches: [codex/issue-1-a235f-abi-gate]
+    paths:
+      - 'scripts/a235f_source_provenance.py'
+      - 'tests/test_a235f_source_provenance.py'
+      - '.github/workflows/a23-source-provenance-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run synthetic-only no-flash provenance tests
+        run: |
+          python3 -m py_compile scripts/a235f_source_provenance.py
+          python3 -m unittest discover -s tests -p 'test_a235f_source_provenance.py' -v

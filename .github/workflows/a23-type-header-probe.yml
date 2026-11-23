@@ -1,0 +1,67 @@
+name: A23 OEM type header probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/issue-1-a235f-abi-gate]
+    paths: [.github/workflows/a23-type-header-probe.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  headers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Retrieve pinned Samsung source and extract only type headers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --disable-pip-version-check gdown==5.2.0
+          gdown --fuzzy 'https://drive.google.com/file/d/1Zs5561S0TRsdFdQ_wSTqw--IoYcZiL4s/view' -O source.tar.gz
+          echo 'bc4b43d689e531e035ff8d4b08eec232bd36ce245f9eeb4c878c7d5ff141e10e  source.tar.gz' | sha256sum -c -
+          mkdir -p probe
+          tar -xzf source.tar.gz -C probe \
+            kernel_src/include/linux/wait.h \
+            kernel_src/include/linux/completion.h
+          tar -tzf source.tar.gz | grep -E \
+            '^kernel_src/(include/linux/spinlock_types.h|include/asm-generic/qspinlock_types.h|arch/arm64/include/asm/spinlock_types.h)$' \
+            > probe/type-header-paths.txt
+          tar -xzf source.tar.gz -C probe -T probe/type-header-paths.txt
+          find probe/kernel_src -type f -name '*.h' -print0 | sort -z | xargs -0 sha256sum > probe/SHA256SUMS
+          grep -nE '^\s*#\s*(if|elif|else|endif|define)|wait_queue_head|completion|spinlock_t' \
+            probe/kernel_src/include/linux/{wait,completion}.h > probe/type-conditional-index.txt
+          python - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          needles = ('PROCA_CERTIFICATES_XATTR', 'PROCA_CERT_ENG', 'PROCA_CERT_USER')
+          matches = []
+          with tarfile.open('source.tar.gz', 'r|gz') as archive:
+              for member in archive:
+                  if not member.isfile() or member.size > 2_000_000:
+                      continue
+                  path = member.name
+                  if not (path.endswith(('.c', '.h')) or 'Kconfig' in path):
+                      continue
+                  content = archive.extractfile(member)
+                  if content is None:
+                      continue
+                  for lineno, line in enumerate(content.read().decode('utf-8', 'replace').splitlines(), 1):
+                      if any(needle in line for needle in needles):
+                          matches.append(f'{path}:{lineno}: {line[:300]}')
+          Path('probe/proca-config-references.txt').write_text(
+              f'matches={len(matches)}\n' + '\n'.join(matches) + '\n', encoding='utf-8'
+          )
+          PY
+          rm source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a23-oem-type-headers
+          path: probe/
+          if-no-files-found: error
