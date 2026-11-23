@@ -1,0 +1,40 @@
+name: A23 OEM type header probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/issue-1-a235f-abi-gate]
+    paths: [.github/workflows/a23-type-header-probe.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  headers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Retrieve pinned Samsung source and extract only type headers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --disable-pip-version-check gdown==5.2.0
+          gdown --fuzzy 'https://drive.google.com/file/d/1Zs5561S0TRsdFdQ_wSTqw--IoYcZiL4s/view' -O source.tar.gz
+          echo 'bc4b43d689e531e035ff8d4b08eec232bd36ce245f9eeb4c878c7d5ff141e10e  source.tar.gz' | sha256sum -c -
+          mkdir -p probe
+          tar -xzf source.tar.gz -C probe \
+            kernel_src/include/linux/wait.h \
+            kernel_src/include/linux/completion.h
+          sha256sum probe/kernel_src/include/linux/{wait,completion}.h > probe/SHA256SUMS
+          grep -nE '^\s*#\s*(if|elif|else|endif|define)|wait_queue_head|completion|spinlock_t' \
+            probe/kernel_src/include/linux/{wait,completion}.h > probe/type-conditional-index.txt
+          rm source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a23-oem-type-headers
+          path: probe/
+          if-no-files-found: error
