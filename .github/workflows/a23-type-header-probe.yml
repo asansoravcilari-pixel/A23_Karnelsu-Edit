@@ -36,6 +36,29 @@ jobs:
           find probe/kernel_src -type f -name '*.h' -print0 | sort -z | xargs -0 sha256sum > probe/SHA256SUMS
           grep -nE '^\s*#\s*(if|elif|else|endif|define)|wait_queue_head|completion|spinlock_t' \
             probe/kernel_src/include/linux/{wait,completion}.h > probe/type-conditional-index.txt
+          python - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          needles = ('PROCA_CERTIFICATES_XATTR', 'PROCA_CERT_ENG', 'PROCA_CERT_USER')
+          matches = []
+          with tarfile.open('source.tar.gz', 'r|gz') as archive:
+              for member in archive:
+                  if not member.isfile() or member.size > 2_000_000:
+                      continue
+                  path = member.name
+                  if not (path.endswith(('.c', '.h')) or 'Kconfig' in path):
+                      continue
+                  content = archive.extractfile(member)
+                  if content is None:
+                      continue
+                  for lineno, line in enumerate(content.read().decode('utf-8', 'replace').splitlines(), 1):
+                      if any(needle in line for needle in needles):
+                          matches.append(f'{path}:{lineno}: {line[:300]}')
+          Path('probe/proca-config-references.txt').write_text(
+              f'matches={len(matches)}\n' + '\n'.join(matches) + '\n', encoding='utf-8'
+          )
+          PY
           rm source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
