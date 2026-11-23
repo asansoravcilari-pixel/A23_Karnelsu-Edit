@@ -70,3 +70,20 @@ yanıltıcı olabilir. Samsung `qspinlock` içindeki `task_struct *owner`
 üyesi grafiği ağ ve soket tiplerine kadar genişletir. Tip grafiği yalnızca
 aday üretir; OEM'e özgü ön işleme, kaynak başlığı veya doğrulanmış OEM
 derleyicisiyle karşılaştırmalı CRC ölçümü hâlâ gereklidir.
+
+## Kaynak başlığı dar tanısı
+
+[Run 45114881716](https://github.com/asansoravcilari-pixel/A23_Karnelsu-Edit/actions/runs/45114881716)
+Samsung kaynak arşivini sabit SHA-256 özetiyle doğrulayıp yalnızca beş
+başlığı `a23-oem-type-headers` artifact'ına çıkardı: `wait.h`,
+`completion.h`, `spinlock_types.h`, ARM64 `spinlock_types.h` ve
+`qspinlock_types.h`. Kaynakta `wait_queue_head` iki üyesi, `completion`
+iki üyesi ile koşulsuz tanımlanıyor ve ilgili `.symtypes` gövdeleriyle
+eşleşiyor. `raw_spinlock` ek alanları `CONFIG_DEBUG_SPINLOCK` veya
+`CONFIG_DEBUG_LOCK_ALLOC`; `qspinlock` ek `owner_cpu`/`owner` alanları
+`CONFIG_DEBUG_QSPINLOCK_OWNER` koşuluna bağlı. OEM IKCONFIG ve yeniden
+derlenen yapılandırmada `CONFIG_DEBUG_QSPINLOCK_OWNER=y`,
+`CONFIG_SMP=y`, `CONFIG_NR_CPUS=8` aynı. Bu, yalnızca bu kaynak ve
+config çiftini doğrular; OEM'in üretimde kullandığı kaynak dosyalarının
+birebir aynı olduğuna ilişkin kanıt yoktur. Özellikle OEM CRC farkını
+başlıklardaki koşulları rastgele kapatarak çözmüş saymayın.
