@@ -1,45 +1,142 @@
 #!/usr/bin/env python3
-"""Compare a kernel Module.symvers with verified stock Samsung .ko CRC metadata."""
+"""Fail-closed OEM module CRC gate for Samsung SM-A235F A235FXXSEEZB1.
+
+CRC match is necessary but NOT sufficient for flashing: Samsung OEM module
+signature trust and actual device boot remain independent gates.
+"""
+from __future__ import annotations
+
 import csv
+import re
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
 
-if len(sys.argv)!=4:
-    raise SystemExit("usage: compare_oem_crc.py stock_module_crc.tsv Module.symvers report.txt")
-reference, symfile, report=map(Path,sys.argv[1:])
-new={}
-for line in symfile.read_text(errors="replace").splitlines():
-    fields=line.split()
-    if len(fields)>1:
-        try:new[fields[1]]=int(fields[0],16)&0xffffffff
-        except ValueError:pass
-if not new:
-    raise SystemExit("Empty or invalid Module.symvers")
-out=defaultdict(lambda:{"match":0,"mismatch":[],"missing":[]})
-reference_rows=0
-for row in csv.DictReader(reference.open(),delimiter="\t"):
-    reference_rows+=1
-    module,symbol=row["module"],row["symbol"]
-    crc=int(row["stock_crc"],16)
-    if symbol not in new:out[module]["missing"].append(symbol)
-    elif new[symbol]!=crc:out[module]["mismatch"].append((symbol,crc,new[symbol]))
-    else:out[module]["match"]+=1
-if reference_rows == 0:
-    raise SystemExit("Empty OEM CRC reference: refusing false ABI success")
-lines=["A235FXXSEEZB1 OEM module ABI static comparison",f"New export symbols: {len(new)}"]
-failed=False
-for module in sorted(out):
-    a=out[module];lines.append(f"MODULE {module}: match={a['match']} mismatch={len(a['mismatch'])} missing={len(a['missing'])}")
-    for symbol,stock,rebuilt in a["mismatch"]:
-        lines.append(f"  MISMATCH {symbol}: OEM=0x{stock:08x} rebuilt=0x{rebuilt:08x}")
-    for symbol in a["missing"]:
-        lines.append(f"  MISSING {symbol}")
-    failed|=bool(a["mismatch"] or a["missing"])
-lines.append("RESULT: STATIC ABI MISMATCH — NEVER FLASH" if failed else
-             "RESULT: STATIC CRC MATCH; SIGNING, AVB, AND DEVICE BOOT STILL UNVERIFIED")
-lines.append("CRC checks are necessary but not sufficient to guarantee device stability.")
-report.parent.mkdir(parents=True,exist_ok=True)
-report.write_text("\n".join(lines)+"\n")
-print("\n".join(lines[:80]))
-if failed:raise SystemExit(1)
+# Counts from original, verified A235FXXSEEZB1 vendor modules.
+EXPECTED_COUNTS = {"qca_cld3_wlan.ko": 408, "rdbg.ko": 34}
+CRC_RE = re.compile(r"0x[0-9a-fA-F]{1,16}\Z")
+
+
+def check_crc(text: str) -> int:
+    if not CRC_RE.fullmatch(text or ""):
+        raise ValueError("invalid hexadecimal CRC: " + repr(text))
+    crc = int(text, 16)
+    if crc > 0xFFFFFFFF:
+        raise ValueError("CRC exceeds 32-bit width: " + repr(text))
+    return crc
+
+
+def load_exports(symfile: Path, errors: list[str]) -> dict[str, int]:
+    exports: dict[str, int] = {}
+    for number, line in enumerate(symfile.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        if not line.strip():
+            continue
+        fields = line.split()
+        if len(fields) < 2:
+            errors.append(f"Module.symvers line {number}: malformed entry")
+            continue
+        try:
+            crc = check_crc(fields[0])
+        except ValueError as exc:
+            errors.append(f"Module.symvers line {number}: {exc}")
+            continue
+        symbol = fields[1]
+        if symbol in exports:
+            errors.append(f"Module.symvers line {number}: duplicate exported symbol {symbol}")
+            continue
+        exports[symbol] = crc
+    if not exports:
+        errors.append("Module.symvers contains no valid exports")
+    return exports
+
+
+def load_reference(reference: Path, errors: list[str]) -> dict[str, dict[str, int]]:
+    entries: dict[str, dict[str, int]] = defaultdict(dict)
+    with reference.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        required = {"module", "symbol", "stock_crc"}
+        if not reader.fieldnames or set(reader.fieldnames) != required:
+            errors.append("OEM reference TSV header must be module, symbol, stock_crc")
+            return entries
+        for number, row in enumerate(reader, 2):
+            if None in row or any(row.get(k) is None for k in required):
+                errors.append(f"OEM reference line {number}: invalid column count")
+                continue
+            module, symbol, encoded = (row[k].strip() for k in ("module", "symbol", "stock_crc"))
+            if module not in EXPECTED_COUNTS:
+                errors.append(f"OEM reference line {number}: unexpected module {module!r}")
+                continue
+            if not symbol:
+                errors.append(f"OEM reference line {number}: empty symbol")
+                continue
+            try:
+                crc = check_crc(encoded)
+            except ValueError as exc:
+                errors.append(f"OEM reference line {number}: {exc}")
+                continue
+            if symbol in entries[module]:
+                errors.append(f"OEM reference line {number}: duplicated import {module}:{symbol}")
+                continue
+            entries[module][symbol] = crc
+    for module, count in EXPECTED_COUNTS.items():
+        found = len(entries[module])
+        if found != count:
+            errors.append(f"OEM reference {module}: expected {count} unique imports, got {found}")
+    return entries
+
+
+def compare(reference: Path, symfile: Path, report: Path) -> bool:
+    errors: list[str] = []
+    exports = load_exports(symfile, errors)
+    entries = load_reference(reference, errors)
+    lines = [
+        "SM-A235F A235FXXSEEZB1 OEM CRC ABI gate",
+        f"Export symbols: {len(exports)}",
+        "Fail-closed: CRC match alone NEVER approves flash; Samsung OEM signatures and device boot unverified.",
+    ]
+    mismatches = 0
+    missing = 0
+    for module in EXPECTED_COUNTS:
+        matches = 0
+        local_mismatches = []
+        local_missing = []
+        for symbol, stock in entries[module].items():
+            if symbol not in exports:
+                local_missing.append(symbol)
+            elif exports[symbol] != stock:
+                local_mismatches.append((symbol, stock, exports[symbol]))
+            else:
+                matches += 1
+        mismatches += len(local_mismatches)
+        missing += len(local_missing)
+        lines.append(f"MODULE {module}: match={matches} mismatch={len(local_mismatches)} missing={len(local_missing)}")
+        for symbol, expected, actual in local_mismatches:
+            lines.append(f"  MISMATCH {symbol}: OEM=0x{expected:08x} rebuilt=0x{actual:08x}")
+        for symbol in local_missing:
+            lines.append(f"  MISSING {symbol}")
+    for error in errors:
+        lines.append("ERROR " + error)
+    success = not errors and not mismatches and not missing
+    lines.append(
+        "RESULT: STATIC CRC MATCH ONLY; OEM SIGNATURE, AVB, DEVICE BOOT STILL UNVERIFIED"
+        if success else "RESULT: FAIL CLOSED — DO NOT FLASH"
+    )
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines[:80]))
+    return success
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        print("usage: compare_oem_crc.py stock_module_crc.tsv Module.symvers report.txt", file=sys.stderr)
+        return 2
+    try:
+        return 0 if compare(*(Path(item) for item in sys.argv[1:])) else 1
+    except (OSError, UnicodeError, csv.Error, ValueError) as exc:
+        print(f"FAIL CLOSED: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
