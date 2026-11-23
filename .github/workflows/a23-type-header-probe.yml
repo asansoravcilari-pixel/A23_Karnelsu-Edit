@@ -29,7 +29,11 @@ jobs:
           tar -xzf source.tar.gz -C probe \
             kernel_src/include/linux/wait.h \
             kernel_src/include/linux/completion.h
-          sha256sum probe/kernel_src/include/linux/{wait,completion}.h > probe/SHA256SUMS
+          tar -tzf source.tar.gz | grep -E \
+            '^kernel_src/(include/linux/spinlock_types.h|include/asm-generic/qspinlock_types.h|arch/arm64/include/asm/spinlock_types.h)$' \
+            > probe/type-header-paths.txt
+          tar -xzf source.tar.gz -C probe -T probe/type-header-paths.txt
+          find probe/kernel_src -type f -name '*.h' -print0 | sort -z | xargs -0 sha256sum > probe/SHA256SUMS
           grep -nE '^\s*#\s*(if|elif|else|endif|define)|wait_queue_head|completion|spinlock_t' \
             probe/kernel_src/include/linux/{wait,completion}.h > probe/type-conditional-index.txt
           rm source.tar.gz
