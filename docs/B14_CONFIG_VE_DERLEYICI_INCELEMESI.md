@@ -48,3 +48,25 @@ profillerini yeniden ölçmek.
 
 Bu belge derleme, ABI eşitliği, Samsung imza zinciri veya cihaz açılışı
 onayı vermez. Burada yeni kernel imajı üretilmedi ve flash yapılmadı.
+
+## 23 Kasım 2026: iki profilde sembol tipi kanıtı
+
+Claude'un `claude/symtypes-analiz` dalındaki
+[run 45111234778](https://github.com/asansoravcilari-pixel/A23_Karnelsu-Edit/actions/runs/45111234778)
+başarılı stok ve KernelSU derlemelerinin `result/symtypes.tar.zst`
+artifact'ları karşılaştırıldı. `kernel/sched/wait.symtypes`,
+`kernel/sched/completion.symtypes`, `net/core/skbuff.symtypes` ve
+`drivers/base/core.symtypes` dosyalarında ortak anahtarların sırasıyla
+879, 868, 1018 ve 807 tanımında **sıfır farklı gövde** bulundu.
+`wait_queue_head`, `completion`, `spinlock_t` ve `raw_spinlock` iki profil
+arasında aynı. Bu, OEM'in tipleriyle eşitlik kanıtı değildir; stok OEM
+`.symtypes` çıktısı mevcut değildir.
+
+Stok profilinin 1424 `.symtypes` dosyasında aynı anahtar için 324 farklı
+gövde tespit edildi; çoğu bir dosyadaki `{ UNKNOWN }` ileri bildirim ile
+başka dosyadaki tam yapı tanımıdır. Bu yüzden farklı çeviri birimlerinin
+tanımlarını rastgele birleştirip tip grafiği üzerinden tek neden seçmek
+yanıltıcı olabilir. Samsung `qspinlock` içindeki `task_struct *owner`
+üyesi grafiği ağ ve soket tiplerine kadar genişletir. Tip grafiği yalnızca
+aday üretir; OEM'e özgü ön işleme, kaynak başlığı veya doğrulanmış OEM
+derleyicisiyle karşılaştırmalı CRC ölçümü hâlâ gereklidir.
