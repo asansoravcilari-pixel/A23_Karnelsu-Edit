@@ -17,12 +17,16 @@ for line in symfile.read_text(errors="replace").splitlines():
 if not new:
     raise SystemExit("Empty or invalid Module.symvers")
 out=defaultdict(lambda:{"match":0,"mismatch":[],"missing":[]})
+reference_rows=0
 for row in csv.DictReader(reference.open(),delimiter="\t"):
+    reference_rows+=1
     module,symbol=row["module"],row["symbol"]
     crc=int(row["stock_crc"],16)
     if symbol not in new:out[module]["missing"].append(symbol)
     elif new[symbol]!=crc:out[module]["mismatch"].append((symbol,crc,new[symbol]))
     else:out[module]["match"]+=1
+if reference_rows == 0:
+    raise SystemExit("Empty OEM CRC reference: refusing false ABI success")
 lines=["A235FXXSEEZB1 OEM module ABI static comparison",f"New export symbols: {len(new)}"]
 failed=False
 for module in sorted(out):
