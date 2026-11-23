@@ -8,9 +8,18 @@
 - Sabit commit: `a16fec82a8deaf8f742ea54f8de98c021af200d4` (6 Ocak 2024, **imzasız** commit).
 - `RELEASE_NOTES` dosyası “Snapdragon LLVM ARM C/C++ Toolchain 10.0.7” sürümünü tanımlıyor.
 - `bin/clang`: GitHub içerik API'sinde **96.194.392 bayt**, Git **blob SHA-1** `5b0eb56499f8d72312fb5f43df1950ad8e8b8ad5` olarak listeleniyor.
-- **Bu SHA-1, dosyanın SHA-256 özeti değildir; Qualcomm tarafından yayımlanmış bir bütünlük kanıtı da değildir.** Gerçek dosya indirilmeyip çalıştırılmadığından `clang --version` çıktısı hâlâ doğrulanmış değil.
+- **Bu SHA-1, dosyanın SHA-256 özeti değildir; Qualcomm tarafından yayımlanmış bir bütünlük kanıtı da değildir.** Aşağıdaki statik CI testi SHA-256'yı ölçtü; `clang --version` hâlâ çalıştırılmadı.
 - Geliştiricisi Qualcomm değil; 10.0.7 adı + notları, OEM'in kullandığı **aynı paket** olduğunu kanıtlamaz.
 - Repo boyutu GitHub'ın bildirdiği 261417 KB düzeyinde; içinde Linux ikilileri bulunuyor. Binary provenance ve lisans koşulları ayrıca incelenmeli. Üretim veya gizli runner üzerinde doğrudan çalıştırılmamalı.
+
+## İzole statik kimlik testi — başarı (yalnızca aday dosyanın tanınması)
+
+- PR GitHub Actions [run 45117190991](https://github.com/asansoravcilari-pixel/A23_Karnelsu-Edit/actions/runs/45117190991), `metadata-only` işi başarıyla tamamlandı; test dosyayı **çalıştırmadı**.
+- İndirilen dosyanın **gerçek SHA-256** değeri: `453971166fa1b628df189e602f355cb2c58c12cd289515400ee6260c9a83459d`.
+- Dosya boyutu 96.194.392 bayt ve Git blob SHA-1 `5b0eb56499f8d72312fb5f43df1950ad8e8b8ad5` ile eşleşti.
+- `file` sonucu: **ELF 64-bit x86-64, dynamically linked, /lib64/ld-linux-x86-64.so.2**.
+- `a23-sdclang1007-static-fingerprint` isimli küçük artifact (ID `14791764287`) hash ve ELF başlığını saklıyor.
+- **Önemli:** Bu sonuç kaynak bütünlüğü için faydalı bir teknik tanımlayıcıdır; Qualcomm resmî paket hash'i, OEM derleyici eşitliği, güvenlik veya kullanım izni yerine geçmez.
 
 ## Samsung kaynak yoluyla mevcut CI arasındaki ölçülebilir fark
 
