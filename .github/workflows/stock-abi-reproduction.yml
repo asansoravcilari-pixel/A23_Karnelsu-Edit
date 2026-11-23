@@ -24,7 +24,8 @@ jobs:
       - name: Validate shell and Python syntax before downloading sources
         run: |
           bash -n scripts/build_stock_abi.sh
-          python3 -m py_compile scripts/extract_stock_boot_config.py scripts/compare_kernel_config.py scripts/fix_samsung_uh_linker.py
+          python3 -m py_compile scripts/extract_stock_boot_config.py scripts/compare_kernel_config.py scripts/fix_samsung_uh_linker.py scripts/symtypes_intersect.py
+          python3 -m unittest discover -s tests -p 'test_symtypes_intersect.py'
       - name: Install original legacy kernel build dependencies
         run: |
           sudo apt-get update

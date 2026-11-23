@@ -30,6 +30,19 @@ collect_build_diagnostics() {
               grep -E '__bss|_end|__rtic|__start' | head -120 > "$WORK_DIR/result/linker/vmlinux-o-symbols.txt" || true
         fi
         echo "Build exited $exit_code; static linker diagnostics preserved" >&2
+        collect_symtypes || true
+    fi
+}
+# Keep genksyms type expansions (.symtypes) so differing ABI types can be named.
+collect_symtypes() {
+    local outdir="$WORK_DIR/unpack/kernel_src/out"
+    [[ -d "$outdir" ]] || return 0
+    mkdir -p "$WORK_DIR/result"
+    local list="$WORK_DIR/symtypes-files.txt"
+    ( cd "$outdir" && find . -name '*.symtypes' -type f | sort ) > "$list"
+    if [[ -s "$list" ]]; then
+        tar -C "$outdir" -T "$list" -cf - | zstd -T0 -10 -q -o "$WORK_DIR/result/symtypes.tar.zst" || true
+        echo "symtypes files kept: $(wc -l < "$list")" >&2
     fi
 }
 trap collect_build_diagnostics EXIT
@@ -179,7 +192,8 @@ cp out/.config "$WORK_DIR/kernel-prebuild.config"
 echo "Profile verified: $PROFILE" | tee -a "$WORK_DIR/config.log"
 # Clang 14 emits unused-but-set-variable as -Werror in legacy Qualcomm audio sources.
 # Demote ONLY this diagnostic; preserve all other compiler errors and driver behavior.
-make "${args[@]}" KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
+make "${args[@]}" KBUILD_SYMTYPES=1 KCFLAGS="-Wno-error=unused-but-set-variable" -j"${JOBS:-4}" 2>&1 | tee "$WORK_DIR/build.log"
+collect_symtypes
 mkdir -p "$WORK_DIR/result"
 cp out/.config "$WORK_DIR/result/kernel.config"
 find out/arch/arm64/boot -maxdepth 1 -type f \( -name 'Image' -o -name 'Image.gz' -o -name '*-dtb' \) -exec cp -v {} "$WORK_DIR/result/" \;
