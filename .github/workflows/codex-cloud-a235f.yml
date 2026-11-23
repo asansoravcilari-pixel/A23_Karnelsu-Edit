@@ -1,0 +1,62 @@
+name: SM-A235F Codex Cloud ABI Engineering
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/codex-cloud-a235f.yml
+
+permissions:
+  contents: read
+
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Preflight cloud Codex authentication
+        env:
+          HAS_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
+        shell: bash
+        run: |
+          if [[ "$HAS_OPENAI_API_KEY" != 'true' ]]; then
+            echo "::error::OPENAI_API_KEY repository secret is missing. Add the API key under Settings > Secrets and variables > Actions > New repository secret, then run this workflow again."
+            exit 1
+          fi
+          echo 'OpenAI authentication is configured; proceeding to Codex.'
+
+      - name: Run Codex on SM-A235F kernel ABI repo
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ':workspace'
+          safety-strategy: drop-sudo
+          prompt-file: .github/codex/prompts/sm-a235f-abi.md
+          output-file: codex-report.md
+
+      - name: Preserve Codex worktree changes
+        if: always()
+        shell: bash
+        run: |
+          git add -N -- scripts docs tests 2>/dev/null || true
+          git diff --binary -- scripts docs tests > codex-changes.patch
+          printf 'Git status:\n' > codex-git-status.txt
+          git status --short >> codex-git-status.txt
+
+      - name: Upload Codex code and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SM-A235F-Codex-Cloud-Output
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            codex-report.md
+            codex-changes.patch
+            codex-git-status.txt
