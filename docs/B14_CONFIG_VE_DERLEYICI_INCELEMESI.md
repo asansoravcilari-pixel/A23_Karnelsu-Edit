@@ -87,3 +87,16 @@ derlenen yapılandırmada `CONFIG_DEBUG_QSPINLOCK_OWNER=y`,
 config çiftini doğrular; OEM'in üretimde kullandığı kaynak dosyalarının
 birebir aynı olduğuna ilişkin kanıt yoktur. Özellikle OEM CRC farkını
 başlıklardaki koşulları rastgele kapatarak çözmüş saymayın.
+
+## PROCA yapılandırması kaynak taraması
+
+[Run 45115180656](https://github.com/asansoravcilari-pixel/A23_Karnelsu-Edit/actions/runs/45115180656)
+aynı sabit kaynak arşivindeki 2 MiB altı bütün `.c`, `.h` ve
+`Kconfig*` dosyalarını `PROCA_CERTIFICATES_XATTR`, `PROCA_CERT_ENG` ve
+`PROCA_CERT_USER` dizgeleri için taradı; **sıfır eşleşme** buldu
+(`proca-config-references.txt`). OEM IKCONFIG'te bulunan seçeneklerin
+yeniden derleme `olddefconfig` aşamasında kaybolması bu kaynak arşivinde
+ilgili tanımların yokluğuyla tutarlıdır. Kaynak ağacı OEM üretim
+girdisiyle birebir eşdeğer sayılamaz. Bu bulgu, PROCA'nın tek başına
+144 sembol CRC farkına yol açtığını kanıtlamaz; eksik OEM kodunun
+sembol tiplerine etkisi ayrıca karşılaştırılmalıdır.
