@@ -7,6 +7,7 @@ signature trust and actual device boot remain independent gates.
 from __future__ import annotations
 
 import csv
+import hashlib
 import re
 import sys
 from collections import defaultdict
@@ -14,6 +15,9 @@ from pathlib import Path
 
 # Counts from original, verified A235FXXSEEZB1 vendor modules.
 EXPECTED_COUNTS = {"qca_cld3_wlan.ko": 408, "rdbg.ko": 34}
+# SHA-256 of the text-only OEM CRC reference exported in Actions run 45077059624.
+# Counts alone cannot detect replacing an import with a different symbol.
+EXPECTED_REFERENCE_SHA256 = "8eb9e40c752dd0bdc2c0ada636a402516841adcd1348a706b4e3dbfcf3f1228a"
 CRC_RE = re.compile(r"0x[0-9a-fA-F]{1,16}\Z")
 
 
@@ -52,6 +56,12 @@ def load_exports(symfile: Path, errors: list[str]) -> dict[str, int]:
 
 def load_reference(reference: Path, errors: list[str]) -> dict[str, dict[str, int]]:
     entries: dict[str, dict[str, int]] = defaultdict(dict)
+    digest = hashlib.sha256(reference.read_bytes()).hexdigest()
+    if digest != EXPECTED_REFERENCE_SHA256:
+        errors.append(
+            "OEM reference SHA-256 mismatch: expected "
+            f"{EXPECTED_REFERENCE_SHA256}, got {digest}"
+        )
     with reference.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         required = {"module", "symbol", "stock_crc"}

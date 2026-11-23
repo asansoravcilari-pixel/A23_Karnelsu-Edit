@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """Black-box regression tests for A235FXXSEEZB1 OEM CRC gate."""
 import subprocess
+import csv
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compare_oem_crc.py"
+REFERENCE = SCRIPT.parents[1] / "references" / "a235fxxseezb1_stock_module_crc.tsv"
 
 
 def reference():
-    lines = ["module\tsymbol\tstock_crc"]
-    for prefix, name, size in (("wifi", "qca_cld3_wlan.ko", 408), ("rdbg", "rdbg.ko", 34)):
-        lines.extend(f"{name}\t{prefix}_{n:03}\t0x{n+1:08x}" for n in range(size))
-    return lines
+    return REFERENCE.read_text(encoding="utf-8").splitlines()
 
 
 def symvers():
-    lines = []
-    for prefix, size in (("wifi", 408), ("rdbg", 34)):
-        lines.extend(f"0x{n+1:08x}\t{prefix}_{n:03}\tvmlinux\tEXPORT_SYMBOL" for n in range(size))
-    return lines
+    with REFERENCE.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    exports = {row["symbol"]: row["stock_crc"] for row in rows}
+    assert len(exports) == 416, "OEM fixture changed unexpectedly"
+    return [f"{crc}\t{symbol}\tvmlinux\tEXPORT_SYMBOL" for symbol, crc in exports.items()]
 
 
 class GateTests(unittest.TestCase):
@@ -62,6 +62,20 @@ class GateTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("duplicated import", report)
 
+    def test_count_preserving_symbol_substitution_fails(self):
+        lines = reference()
+        lines[1] = lines[1].replace("PDE_DATA", "fabricated_symbol")
+        code, report = self.invoke(refs=lines)
+        self.assertNotEqual(code, 0)
+        self.assertIn("reference SHA-256 mismatch", report)
+
+    def test_count_preserving_crc_substitution_fails(self):
+        lines = reference()
+        lines[1] = lines[1].replace("0x2c75b772", "0x2c75b773")
+        code, report = self.invoke(refs=lines)
+        self.assertNotEqual(code, 0)
+        self.assertIn("reference SHA-256 mismatch", report)
+
     def test_unexpected_module_fails(self):
         code, report = self.invoke(refs=reference() + ["unknown.ko\ta\t0x00000001"])
         self.assertNotEqual(code, 0)
@@ -69,22 +83,34 @@ class GateTests(unittest.TestCase):
 
     def test_corrupt_crc_fails(self):
         lines = reference()
-        lines[1] = lines[1].replace("0x00000001", "garbage")
+        lines[1] = lines[1].replace("0x2c75b772", "garbage")
         code, report = self.invoke(refs=lines)
         self.assertNotEqual(code, 0)
         self.assertIn("invalid hexadecimal CRC", report)
 
+    def test_missing_reference_file_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Module.symvers").write_text("\n".join(symvers()) + "\n")
+            run = subprocess.run(
+                [sys.executable, str(SCRIPT), str(root / "missing.tsv"),
+                 str(root / "Module.symvers"), str(root / "report")],
+                text=True, capture_output=True,
+            )
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("FAIL CLOSED", run.stderr)
+
     def test_missing_export_fails(self):
         code, report = self.invoke(syms=symvers()[1:])
         self.assertNotEqual(code, 0)
-        self.assertIn("MISSING wifi_000", report)
+        self.assertIn("MISSING PDE_DATA", report)
 
     def test_crc_mismatch_fails(self):
         lines = symvers()
-        lines[0] = lines[0].replace("0x00000001", "0x0000ffff")
+        lines[0] = lines[0].replace("0x2c75b772", "0x0000ffff")
         code, report = self.invoke(syms=lines)
         self.assertNotEqual(code, 0)
-        self.assertIn("MISMATCH wifi_000", report)
+        self.assertIn("MISMATCH PDE_DATA", report)
 
     def test_duplicate_export_fails(self):
         lines = symvers()
