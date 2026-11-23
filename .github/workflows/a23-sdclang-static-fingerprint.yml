@@ -1,5 +1,8 @@
 name: A23 SDClang 10.0.7 static fingerprint (untrusted candidate)
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/a23-sdclang-static-fingerprint.yml'
   push:
     branches: [codex/issue-1-a235f-abi-gate]
     paths:
