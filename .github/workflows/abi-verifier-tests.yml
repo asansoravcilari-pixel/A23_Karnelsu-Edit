@@ -1,0 +1,19 @@
+name: SM-A235F OEM ABI Verifier Regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/compare_oem_crc.py
+      - tests/test_compare_oem_crc.py
+      - .github/workflows/abi-verifier-tests.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run exact firmware CRC gate regressions
+        run: python3 -m unittest discover -s tests -p 'test_compare_oem_crc.py' -v
