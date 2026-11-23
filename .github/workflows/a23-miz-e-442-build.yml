@@ -1,0 +1,60 @@
+name: A23 Binary-E 442-symbol OEM ABI build (research only)
+on:
+  push:
+    branches: [codex/issue-1-a235f-abi-gate]
+    paths:
+      - '.github/workflows/a23-miz-e-442-build.yml'
+      - 'scripts/build_miz_e_stock_abi.sh'
+  pull_request:
+    paths:
+      - '.github/workflows/a23-miz-e-442-build.yml'
+      - 'scripts/build_miz_e_stock_abi.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  stock-e:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MizProject verified build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc binutils bison build-essential cpio curl flex gawk git kmod \
+            libelf-dev libncurses-dev libssl-dev lz4 make openssl perl \
+            pkg-config python3 rsync tar xz-utils zip zlib1g-dev zstd
+      - name: Check pinned source and shell
+        run: |
+          bash -n scripts/build_miz_e_stock_abi.sh
+          python3 -m py_compile scripts/compare_oem_crc.py
+          sha256sum configs/a235fxxseezb1_stock.config
+      - name: Build pinned E stock profile with OEM config
+        run: bash scripts/build_miz_e_stock_abi.sh
+      - name: Retrieve original Samsung Wi-Fi and rdbg CRC reference
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p miz-e-abi-work/reference
+          gh run download 45077059624 --repo "$GITHUB_REPOSITORY" \
+            -n SM-A235F-OEM-CRC-reference \
+            -D miz-e-abi-work/reference
+          test -s miz-e-abi-work/reference/stock_module_crc.tsv
+      - name: Check ALL 408 Wi-Fi + 34 rdbg imports
+        run: |
+          python3 scripts/compare_oem_crc.py \
+            miz-e-abi-work/reference/stock_module_crc.tsv \
+            miz-e-abi-work/src/out/Module.symvers \
+            miz-e-abi-work/result/442-oem-crc-check.txt
+      - name: Preserve evidence even on errors (never flash)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: A23-Binary-E-stock-442-ABI-evidence
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            miz-e-abi-work/result/**
+            miz-e-abi-work/build.log
